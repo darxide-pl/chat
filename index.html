@@ -1,0 +1,447 @@
+<!doctype html>
+<html>
+<head>
+<title>Chat</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-2.2.4.min.js" integrity="sha256-BbhdlvQf/xTY9gja0Dq3HiwQF8LaCRTXxZKRutelT44=" crossorigin="anonymous"></script>
+    <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,300,600,700&subset=latin,latin-ext' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css" />
+</head>
+
+
+<body>
+    
+<form action="">
+    <input class="huehue" autocomplete="off" /><button>Send</button>
+</form>
+
+<div class="overlay">
+    <div class="__table">
+        <div class="__cell">
+            <div class="row">
+                <div class="col-xs-4 col-xs-offset-4 col-sm-2 col-sm-offset-5">
+                    <div class="input-group">
+                        <input type="text" class="form-control __login" placeholder="login" />
+                        <span class="input-group-addon btn btn-primary __do_login">
+                            <i class="fa fa-sign-in"></i>
+                        </span>
+                    </div>                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="chat">
+    <div class="relative">
+        <div class="list-users">
+            <span class="section-title">Użytkownicy</span>
+            <div class="list-group list-group-sm"></div>
+        </div>        
+        <div class="messages">
+            <div class="relative">
+                <div class="message-container">
+                    <div class="tabs">
+                        <a href="javascript:;" class="active" data-room="0">Ogólny</a>
+                    </div>
+                    <div class="rooms">
+                        <div class="room active" data-room="0"></div>
+                    </div>
+                </div>                
+                <div class="send-form">
+                    <div class="input-group">
+                        <input type="text" class="form-control __message"  />                        
+                        <span class="input-group-addon btn btn-primary">
+                            <i class="fa fa-paper-plane __do_message" aria-hidden="true"></i>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+var socket = io();
+
+$(document).on('click' , '.__do_login' , function() {
+    socket.emit('login' , $('.__login').val())
+})
+
+$(document).on('click' , '.__do_message' , function() {
+    if($.trim($('.__message').val()).length > 0) {
+        socket.emit('msg' ,  JSON.stringify({msg:$('.__message').val(),room:$('.tabs a.active').data('room')}))
+        $('.__message').val("")        
+    }
+})
+
+var typing = 0
+
+$(document).on('keyup' , '.__message' , function(e) {
+    if(e.which == 13) {
+        if($.trim($('.__message').val()).length > 0) {
+            socket.emit('msg' , JSON.stringify({msg:$('.__message').val(),room:$('.tabs a.active').data('room')}))
+            if($('.tabs a.active').data('room') != 0) {
+                $('.room[data-room="'+$('.tabs a.active').data('room')+'"]').append(function() {
+                    var html = ""
+                    html +=  "<div class='message-item'>"
+                    html +=     "<div class='message-item__header'>"+__nick+" <span class='pull-right'>"+now()+"</span></div>"
+                    html +=     "<div class='message-item__content'>"+$('.__message').val()+"</div>"
+                    html +=  "</div>"
+                    return html
+                })                
+            }
+            $('.__message').val("")   
+        }
+    } else {
+        if(typing == 0 && $('.room[data-room="0"]').hasClass('active') === true) {
+            typing = 1
+            socket.emit('typing','')            
+        }
+    }
+})
+
+socket.on('typing' , function(msg) {
+    do_typing(msg)
+})
+
+socket.on('msg' , function(msg) {
+    var data = JSON.parse(msg)
+    $('.room[data-room="'+data.room+'"]').append(function() {
+        var html = ""
+        html +=  "<div class='message-item'>"
+        html +=     "<div class='message-item__header'>"+data.user+" <span class='pull-right'>"+data.now+"</span></div>"
+        html +=     "<div class='message-item__content'>"+data.msg.msg+"</div>"
+        html +=  "</div>"
+        return html
+    })
+
+    if($('.room[data-room="'+data.room+'"]').hasClass('active') == false) {
+        $('.tabs a[data-room="'+data.room+'"]').addClass('new')
+    }
+
+    __scroll()
+    remove_typing()
+})
+
+socket.on('priv' , function(msg) {
+    var data = JSON.parse(msg)
+    if($('.tabs a[data-room="'+data.user+'"]').length == 0) {
+        $('.tabs a').removeClass('active')
+        $('.tabs').append(function() {
+            var html = ""
+            html += "<a href='javascript:;' class='active' data-room='"+data.user+"'>"+data.user+"</html>"
+            return html 
+        })
+        $('.room').removeClass('active')
+        $('.rooms').append(function() {
+            var html = ""
+            html += "<div class='room active' data-room='"+data.user+"'></div>"
+            return html
+        })
+
+    }
+    $('.room[data-room="'+data.user+'"]').append(function() {
+        var html = ""
+        html +=  "<div class='message-item'>"
+        html +=     "<div class='message-item__header'>"+data.user+" <span class='pull-right'>"+data.now+"</span></div>"
+        html +=     "<div class='message-item__content'>"+data.msg.msg+"</div>"
+        html +=  "</div>"
+        return html     
+    })
+
+    if($('.room[data-room="'+data.user+'"]').hasClass('active') == false) {
+        $('.tabs a[data-room="'+data.user+'"]').addClass('new')
+    }
+})
+
+var __nick = ""
+socket.on('login' , function(msg) {
+
+    if(msg == '0') {
+        $('.overlay .input-group input').addClass('error')
+        $('.__login').val("nick zajęty")
+    } 
+
+    if(msg == '1') {
+        $('.overlay .input-group input').removeClass('error')
+        $('.overlay').slideUp(180)
+        __nick = $('.__login').val()
+    }
+})
+
+socket.on('users' , function(msg) {
+    __users_list(JSON.parse(msg))
+})
+
+$(document).on('click' , '.list-group-item .fa-envelope' , function() {
+    var user = $(this).data('user')
+    if($('.tabs a[data-room="'+user+'"]').length == 0) {
+        $('.tabs a').removeClass('active')
+        $('.tabs').append(function() {
+            var html = ""
+            html += "<a href='javascript:;' class='active' data-room='"+user+"'>"+user+"</html>"
+            return html 
+        })
+        $('.room').removeClass('active')
+        $('.rooms').append(function() {
+            var html = ""
+            html += "<div class='room active' data-room='"+user+"'></div>"
+            return html
+        })
+    }
+})
+
+$(document).on('click' , '.tabs a' , function() {
+    $('.tabs a').removeClass('active new')
+    $(this).addClass('active')
+    $('.room').removeClass('active')
+    $('.room[data-room="'+$(this).data('room')+'"]').addClass('active')
+})
+ 
+function __users_list(data) {
+    html = ""
+    for (var k in data) {
+        html += "<div class='list-group-item'>"+k+" <i class='fa fa-envelope pull-right' data-user='"+k+"'></i></div>"
+    }
+    $('.list-users .list-group').html(html)
+}
+
+function __scroll() {
+    $('.room[data-room="0"]').scrollTop($('.room[data-room="0"]')[0].scrollHeight);    
+}
+
+function do_typing(msg) {
+    $('.room[data-room="0"]').append(function() {
+        var html = ""
+        html +=  "<div class='message-item typing'>"
+        html +=     "<div class='message-item__content'>Użytkownik "+msg+" pisze... </div>"
+        html +=  "</div>"
+        return html
+    })
+    __scroll()
+}
+
+function remove_typing(){
+    $('.typing').fadeOut(150,function() {
+        $(this).remove()
+        typing = 0
+    })
+}
+
+$('form').submit(function(e){
+    e.preventDefault()
+    socket.emit('chat message', $('.huehue').val())
+    $('.huehue').val('');
+    return false;
+});
+
+socket.on('leave_msg' , function(msg) {
+    $('.room[data-room="0"]').append(function() {
+        var html = ""
+        html +=  "<div class='message-item message-item--danger'>"
+        html +=     "<div class='message-item__content'>Użytkownik <strong>"+msg+"</strong> opuścił czat</div>"
+        html +=  "</div>"
+        return html
+    })    
+    __scroll()
+    remove_typing()
+})
+
+socket.on('join_msg' , function(msg) {
+    $('.room[data-room="0"]').append(function() {
+        var html = ""
+        html +=  "<div class='message-item message-item--success'>"
+        html +=     "<div class='message-item__content'>Użytkownik <strong>"+msg+"</strong> dołączył do czatu</div>"
+        html +=  "</div>"
+        return html
+    })    
+    __scroll()
+    remove_typing()
+})
+
+function now() {
+    var date = new Date()
+    var minutes = (date.getMinutes() < 10) ? '0'+date.getMinutes() : date.getMinutes()
+    var seconds = (date.getSeconds() < 10) ? '0'+date.getSeconds() : date.getSeconds()
+
+    return date.getHours() + ':' +  minutes + ':' + seconds
+}
+
+</script>
+
+<style>
+.tabs a.new::after {
+    position: absolute;
+    right: 3px;
+    top: 3px;
+    content: " ";
+    display: block;
+    border-radius: 50%;
+    background-color: red;
+    z-index: 100;
+    width: 5px;
+    height: 5px;
+}
+.tabs a {
+    margin-right: 10px;
+    border: 1px solid rgba(74, 74, 74, 0.5) !important;
+    padding: 6px 15px;
+    border-radius: 6px;
+    position: relative;
+}
+
+.typing .message-item__content {
+    padding: 0;
+    font-size: 12px !important;
+    text-align: center;
+}
+.tabs {
+    padding: 5px 0px;
+    margin-bottom: 10px;    
+}
+.tabs a.active {
+    padding: 6px 15px;
+    background-color: rgba(74, 74, 74, 0.5) !important;
+    border-radius: 6px;
+    color: bisque;
+}
+.message-item--danger {
+    text-align: center;
+    color: #ff7777 !important;
+}
+.message-item--success {
+    text-align: center;
+    color: rgba(157, 255, 121, 0.5) !important;
+}
+.message-item--danger .message-item__content,
+.message-item--success .message-item__content {
+    padding-top: 0;
+}
+.message-item {
+    color: #fff;
+    border: 1px solid #4e4e4e;
+    border-radius: 5px;
+    padding: 10px 15px;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+.message-item__header {
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: bold;
+}
+.message-item__content {
+    padding-top: 10px;
+}
+.messages {
+    position: absolute;
+    top: 0px;
+    left: 30%;
+    width: 70%;
+    height: 100%;
+    padding: 15px;
+}
+.send-form {
+    position: absolute;
+    bottom: 0;    
+    width: 100%;
+}
+* { 
+    margin: 0; 
+    padding: 0; 
+    box-sizing: border-box; 
+}
+.relative {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+body { 
+    font-family: Open Sans,'sans-serif'; 
+    font-weight: 300;
+    font-size: 16px;
+    position: relative;
+    overflow: hidden;
+}
+.section-title {
+    color: #fff;
+    display: block;
+    text-align: center;
+    margin-bottom: 15px;
+}
+.list-users .list-group {
+    max-width: 300px;
+    margin: 0 auto;
+}
+.message-container {
+    height: calc(90% - 28px) !important;
+    position: relative;
+}
+.room {
+    height: 100%;
+    position: absolute;
+    padding-right: 15px;
+    left: 0%;
+    width: 100%;
+    overflow-y: scroll;
+    display: none;
+}
+.room.active {
+    display: block;
+}
+.chat {
+    background-color: #2D353C;
+    position: absolute;
+    width: 100vw;
+    height: 100vh;
+    top:0px;
+    left: 0px;
+}
+.overlay {
+    background-color: #2D353C;
+    position: fixed;
+    width:100%;
+    height: 100%;
+    top:0px;
+    left: 0px;
+    z-index: 100;
+}
+.list-group-sm .list-group-item {
+    padding: 4px 8px;
+}
+.list-group-item .fa-envelope {
+    cursor: pointer;
+    margin-top: 4px;
+}
+.list-users {
+    width: 30%;
+    padding: 15px;
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    height: 100%;
+    border-right: 1px solid #152C2A;    
+}
+.__table {
+    display: table;
+    width: 100%;
+    height: 100%;
+}
+.__cell {
+    display: table-cell;
+    width: 100%;
+    height: 100%;
+    vertical-align: middle;
+    text-align: center;
+}
+.error {
+    border:1px solid red !important;
+    color: red !important;
+}
+</style>
+
+  </body>
+</html>
